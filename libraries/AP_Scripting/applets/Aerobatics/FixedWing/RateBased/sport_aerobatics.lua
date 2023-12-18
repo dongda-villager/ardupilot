@@ -5,6 +5,7 @@ cmd = 3: rolling circle, arg1 = yaw rate, arg2 = roll rate
 cmd = 4: knife edge at any angle, arg1 = roll angle to hold, arg2 = duration
 cmd = 5: pause, holding heading and alt to allow stabilization after a move, arg1 = duration in seconds
 ]]--
+-- luacheck: only 0
 
 DO_JUMP = 177
 k_throttle = 70
@@ -83,6 +84,7 @@ TRIK_SEL_FN = bind_add_param2("_SEL_FN", 2, 301)
 TRIK_ACT_FN = bind_add_param2("_ACT_FN", 3, 300)
 TRIK_COUNT  = bind_add_param2("_COUNT",  4, 3)
 TRICKS = {}
+local last_trick_action_state = rc:get_aux_cached(TRIK_ACT_FN:get())
 
 
 function tricks_exist()
@@ -282,6 +284,12 @@ function recover_alt()
        return target_pitch, pitch_rate, yaw_rate
 end
 
+function set_rate_targets(throttle, roll_rate, pitch_rate, yaw_rate)
+   -- we don't want a rudder offset, and we do want yaw rate
+   vehicle:set_rudder_offset(0, true)
+   vehicle:set_target_throttle_rate_rpy(throttle, roll_rate, pitch_rate, yaw_rate)
+end
+
 --  start of trick routines---------------------------------------------------------------------------------
 function do_axial_roll(arg1, arg2)
    -- constant roll rate axial roll, arg1 roll rate, arg2 is number of rolls
@@ -326,7 +334,7 @@ function do_axial_roll(arg1, arg2)
       throttle = throttle_controller()
       target_pitch = height_PI.update(initial_height)
       pitch_rate, yaw_rate = pitch_controller(target_pitch, wp_yaw_deg, PITCH_TCONST:get())
-      vehicle:set_target_throttle_rate_rpy(throttle, roll_rate, pitch_rate, yaw_rate)
+      set_rate_targets(throttle, roll_rate, pitch_rate, yaw_rate)
    end
 end
 
@@ -400,7 +408,7 @@ function do_loop(arg1, arg2)
   else
      roll_rate = earth_frame_wings_level(level_type)
   end
-   vehicle:set_target_throttle_rate_rpy(throttle, roll_rate, pitch_rate, 0)
+  set_rate_targets(throttle, roll_rate, pitch_rate, 0)
 end
 
 
@@ -452,7 +460,7 @@ function do_rolling_circle(arg1, arg2)
       pitch_rate, yaw_rate = pitch_controller(target_pitch, wrap_360(circle_yaw_deg+initial_yaw_deg), PITCH_TCONST:get())
       throttle = throttle_controller()
       throttle = constrain(throttle, 0, 100.0)
-      vehicle:set_target_throttle_rate_rpy(throttle, roll_rate_dps, pitch_rate, yaw_rate)
+      set_rate_targets(throttle, roll_rate_dps, pitch_rate, yaw_rate)
    end
 end
 
@@ -481,7 +489,7 @@ function do_knife_edge(arg1,arg2)
         target_pitch = height_PI.update(initial_height)
         pitch_rate, yaw_rate = pitch_controller(target_pitch, wp_yaw_deg, PITCH_TCONST:get())
         throttle = throttle_controller()
-        vehicle:set_target_throttle_rate_rpy(throttle, roll_rate, pitch_rate, yaw_rate)
+        set_rate_targets(throttle, roll_rate, pitch_rate, yaw_rate)
     else
         gcs:send_text(5, string.format("Finished Knife Edge", arg1))
         running = false
@@ -510,7 +518,7 @@ function do_pause(arg1,arg2)
         target_pitch = height_PI.update(initial_height)
         pitch_rate, yaw_rate = pitch_controller(target_pitch, wp_yaw_deg, PITCH_TCONST:get())
         throttle = throttle_controller()
-        vehicle:set_target_throttle_rate_rpy(throttle, roll_rate, pitch_rate, yaw_rate)
+        set_rate_targets(throttle, roll_rate, pitch_rate, yaw_rate)
     else 
         running = false
         gcs:send_text(5, string.format("Pause Over"))
@@ -583,7 +591,7 @@ function do_knifedge_circle(arg1, arg2)
       pitch_rate, yaw_rate = pitch_controller(target_pitch, wrap_360(circle_yaw_deg+initial_yaw_deg), PITCH_TCONST:get())
       throttle = throttle_controller()
       throttle = constrain(throttle, 0, 100.0)
-      vehicle:set_target_throttle_rate_rpy(throttle, roll_rate_dps, pitch_rate, yaw_rate)
+      set_rate_targets(throttle, roll_rate_dps, pitch_rate, yaw_rate)
    end
 end
 
@@ -664,7 +672,7 @@ function do_4point_roll(arg1, arg2)
       throttle = throttle_controller()
       target_pitch = height_PI.update(initial_height)
       pitch_rate, yaw_rate = pitch_controller(target_pitch, wp_yaw_deg, PITCH_TCONST:get())
-      vehicle:set_target_throttle_rate_rpy(throttle, roll_rate, pitch_rate, yaw_rate)
+      set_rate_targets(throttle, roll_rate, pitch_rate, yaw_rate)
    end
 end
 
@@ -706,7 +714,7 @@ function do_split_s(arg1, arg2)
       end
    end 
    throttle = throttle_controller() 
-   vehicle:set_target_throttle_rate_rpy(throttle, roll_rate, pitch_rate, 0) 
+   set_rate_targets(throttle, roll_rate, pitch_rate, 0)
 end
  
 function get_wp_location(i)
@@ -763,7 +771,6 @@ function check_auto_mission()
    end
 end
   
-local last_trick_action_state = 0
 local trick_sel_chan = nil
 local last_trick_selection = 0
 
@@ -791,7 +798,7 @@ end
  name[1] = "Roll(s)"
  name[2] = "Loop(s)/Turnaround"
  name[3] = "Rolling Circle"
- name[4] = "Knife-Edge"
+ name[4] = "Straight Hold"
  name[5] = "Pause"
  name[6] = "Knife Edge Circle"
  name[7] = "4pt Roll"
@@ -817,7 +824,7 @@ function check_trick()
       return 0
    end
    if action == 1 and selection ~= last_trick_selection then
-         gcs:send_text(5, string.format("%s selected", name[id]))
+         gcs:send_text(5, string.format("Trick %u selected (%s)", id, name[id]))
          last_trick_action_state = action
          last_trick_selection = selection
          return 0
@@ -836,7 +843,7 @@ function check_trick()
       end
       local id = TRICKS[selection].id:get()    
       if action == 1 then
-         gcs:send_text(5, string.format("%s selected ", name[id]))
+         gcs:send_text(5, string.format("Trick %u selected (%s)", id, name[id]))
          return 0
       end
       -- action changed to execute
@@ -876,6 +883,10 @@ function do_trick(cmd,arg1,arg2)
 end
 
 function update()
+   if ahrs:get_velocity_NED() == nil  or ahrs:get_EAS2TAS() == nil or ahrs:get_relative_position_NED_origin() == nil then
+      -- don't start till we have valid ahrs estimates
+      return update, 10
+   end
    if vehicle:get_mode() == MODE_AUTO then
       check_auto_mission() --run a trick mission item
    elseif tricks_exist() then

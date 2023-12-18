@@ -20,10 +20,12 @@
 //  UBlox Lea6H protocol: http://www.u-blox.com/images/downloads/Product_Docs/u-blox6_ReceiverDescriptionProtocolSpec_%28GPS.G6-SW-10018%29.pdf
 #pragma once
 
-#include "AP_GPS.h"
-#include "GPS_Backend.h"
+#include "AP_GPS_config.h"
 
 #if AP_GPS_UBLOX_ENABLED
+
+#include "AP_GPS.h"
+#include "GPS_Backend.h"
 
 #include <AP_HAL/AP_HAL.h>
 
@@ -142,6 +144,11 @@ public:
         return true;
 #endif // CONFIG_HAL_BOARD != HAL_BOARD_SITL
     }
+
+    bool get_error_codes(uint32_t &error_codes) const override {
+        error_codes = _unconfigured_messages;
+        return true;
+    };
 
     void broadcast_configuration_failure_reason(void) const override;
     void Write_AP_Logger_Log_Startup_messages() const override;
@@ -560,6 +567,10 @@ private:
         uint8_t clsID;
         uint8_t msgID;
     };
+    struct PACKED ubx_ack_nack {
+        uint8_t clsID;
+        uint8_t msgID;
+    };
 
 
     struct PACKED ubx_cfg_cfg {
@@ -613,6 +624,7 @@ private:
         ubx_rxm_rawx rxm_rawx;
 #endif
         ubx_ack_ack ack;
+        ubx_ack_nack nack;
         ubx_tim_tm2 tim_tm2;
     } _buffer;
 
@@ -844,6 +856,7 @@ private:
         uint32_t done_mask;
         uint32_t unconfig_bit;
         uint8_t layers;
+        int8_t fetch_index;
     } active_config;
 
 #if GPS_MOVING_BASELINE

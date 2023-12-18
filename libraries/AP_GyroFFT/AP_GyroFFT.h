@@ -113,6 +113,11 @@ public:
     bool check_esc_noise() const { return (_options & uint32_t(Options::ESCNoiseCheck)) != 0; }
     // look for a frequency in the detected noise
     float has_noise_at_frequency_hz(float freq) const;
+    static float calculate_notch_frequency(float* freqs, uint16_t numpeaks, float harmonic_fit, uint8_t& harmonics);
+    static bool is_harmonic_of(float harmonic, float fundamental, uint8_t mult, float _fit) {
+        const float fit = 100.0f * fabsf(harmonic - fundamental * mult) / harmonic;
+        return (isfinite(fit) && fit < _fit);
+    }
 
     static const struct AP_Param::GroupInfo var_info[];
     static AP_GyroFFT *get_singleton() { return _singleton; }
@@ -185,7 +190,7 @@ private:
     float update_tl_noise_center_bandwidth_hz(FrequencyPeak peak, uint8_t axis, float value) {
         return (_thread_state._center_bandwidth_hz_filtered[peak][axis] = _center_bandwidth_filter[peak].apply(axis, value));
     }
-    // write single log mesages
+    // write single log messages
     void log_noise_peak(uint8_t id, FrequencyPeak peak) const;
     // calculate the peak noise frequency
     void calculate_noise(bool calibrating, const EngineConfig& config);

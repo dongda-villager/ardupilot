@@ -57,13 +57,14 @@ using namespace Linux;
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_DARK || \
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_PXFMINI || \
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIGATOR ||  \
-    CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1
+    CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1 || \
+    CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_CANZERO
 static UtilRPI utilInstance;
 #else
 static Util utilInstance;
 #endif
 
-// 5 serial ports on Linux
+// 9 serial ports on Linux
 static UARTDriver uartADriver(true);
 static UARTDriver uartCDriver(false);
 static UARTDriver uartDDriver(false);
@@ -90,7 +91,8 @@ static UARTDriver uartBDriver(false);
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_BH || \
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_PXFMINI || \
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIGATOR|| \
-    ((CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1) && (OBAL_ALLOW_ADC ==1))
+    ((CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1) && (OBAL_ALLOW_ADC ==1)) || \
+    CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_CANZERO
 static AnalogIn_ADS1115 analogIn;
 #elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_PXF || \
       CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_ERLEBOARD || \
@@ -123,7 +125,8 @@ static GPIO_BBB gpioDriver;
       CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_BH || \
       CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_DARK || \
       CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_PXFMINI || \
-      CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1
+      CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1 || \
+      CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_CANZERO
 static GPIO_RPI gpioDriver;
 #elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIGATOR
 static GPIO_Navigator gpioDriver;
@@ -154,7 +157,8 @@ static RCInput_Multi rcinDriver{2, new RCInput_AioPRU, new RCInput_RCProtocol(NU
       CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_BH || \
       CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_DARK || \
       CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_PXFMINI || \
-      CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1
+      CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1 || \
+      CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_CANZERO
 static RCInput_RPI rcinDriver;
 #elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_ZYNQ || \
       CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OCPOC_ZYNQ
@@ -219,6 +223,8 @@ static RCOutput_Sysfs rcoutDriver(0, 0, 15);
 static RCOutput_Sysfs rcoutDriver(0, 0, 8);
 #elif  CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_OBAL_V1
 static RCOutput_PCA9685 rcoutDriver(i2c_mgr_instance.get_device(1, PCA9685_PRIMARY_ADDRESS), 0, 0, RPI_GPIO_<17>());
+#elif CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_CANZERO
+static RCOutput_Sysfs rcoutDriver(0, 0, 2);
 #else
 static Empty::RCOutput rcoutDriver;
 #endif
@@ -233,7 +239,7 @@ static Empty::OpticalFlow opticalFlow;
 
 static Empty::DSP dspDriver;
 static Empty::Flash flashDriver;
-static Empty::QSPIDeviceManager qspi_mgr_instance;
+static Empty::WSPIDeviceManager wspi_mgr_instance;
 
 #if HAL_NUM_CAN_IFACES
 static CANIface* canDrivers[HAL_NUM_CAN_IFACES];
@@ -253,7 +259,7 @@ HAL_Linux::HAL_Linux() :
         &uartJDriver,
         &i2c_mgr_instance,
         &spi_mgr_instance,
-        &qspi_mgr_instance,
+        &wspi_mgr_instance,
         &analogIn,
         &storageDriver,
         &uartADriver,
@@ -275,18 +281,30 @@ HAL_Linux::HAL_Linux() :
 
 void _usage(void)
 {
-    printf("Usage: -A uartAPath -B uartBPath -C uartCPath -D uartDPath -E uartEPath -F uartFPath -G uartGpath -H uartHpath -I uartIpath -J uartJpath\n");
-    printf("Options:\n");
-    printf("\tserial:\n");
-    printf("                    -A /dev/ttyO4\n");
-    printf("\t                  -B /dev/ttyS1\n");
+    printf("Usage: --serial0 serial0Path --serial1 serial2Path \n");
+    printf("Examples:\n");
+    printf("\tserial (0 through 9 available):\n");
+    printf("\t                  --serial0 /dev/ttyO4\n");
+    printf("\t                  --serial3 /dev/ttyS1\n");
+    printf("\tlegacy UART options still work, their mappings are:\n");
+    printf("\t                  -A/--uartA is SERIAL0\n");
+    printf("\t                  -B/--uartB is SERIAL3\n");
+    printf("\t                  -C/--uartC is SERIAL1\n");
+    printf("\t                  -D/--uartD is SERIAL2\n");
+    printf("\t                  -E/--uartE is SERIAL4\n");
+    printf("\t                  -F/--uartF is SERIAL5\n");
+    printf("\t                  -G/--uartG is SERIAL6\n");
+    printf("\t                  -H/--uartH is SERIAL7\n");
+    printf("\t                  -I/--uartI is SERIAL8\n");
+    printf("\t                  -J/--uartJ is SERIAL9\n");
     printf("\tnetworking tcp:\n");
-    printf("\t                  -C tcp:192.168.2.15:1243:wait\n");
-    printf("\t                  -A tcp:11.0.0.2:5678\n");
-    printf("\t                  -A udp:11.0.0.2:14550\n");
+    printf("\t                  --serial1 tcp:192.168.2.15:1243:wait\n");
+    printf("\t                  --serial0 tcp:11.0.0.2:5678\n");
+    printf("\t                  --serial0 udp:11.0.0.2:14550\n");
+    printf("\t                  --serial0 udp:11.0.0.2:14550\n");
     printf("\tnetworking UDP:\n");
-    printf("\t                  -A udp:11.0.0.255:14550:bcast\n");
-    printf("\t                  -A udpin:0.0.0.0:14550\n");
+    printf("\t                  --serial0 udp:11.0.0.255:14550:bcast\n");
+    printf("\t                  --serial0 udpin:0.0.0.0:14550\n");
     printf("\tcustom log path:\n");
     printf("\t                  --log-directory /var/APM/logs\n");
     printf("\t                  -l /var/APM/logs\n");
@@ -315,15 +333,25 @@ void HAL_Linux::run(int argc, char* const argv[], Callbacks* callbacks) const
     int opt;
     const struct GetOptLong::option options[] = {
         {"uartA",         true,  0, 'A'},
+        {"serial0",       true,  0, 'A'},
         {"uartB",         true,  0, 'B'},
+        {"serial3",       true,  0, 'B'},
         {"uartC",         true,  0, 'C'},
+        {"serial1",       true,  0, 'C'},
         {"uartD",         true,  0, 'D'},
+        {"serial2",       true,  0, 'D'},
         {"uartE",         true,  0, 'E'},
+        {"serial4",       true,  0, 'E'},
         {"uartF",         true,  0, 'F'},
+        {"serial5",       true,  0, 'F'},
         {"uartG",         true,  0, 'G'},
+        {"serial6",       true,  0, 'G'},
         {"uartH",         true,  0, 'H'},
+        {"serial7",       true,  0, 'H'},
         {"uartI",         true,  0, 'I'},
+        {"serial8",       true,  0, 'I'},
         {"uartJ",         true,  0, 'J'},
+        {"serial9",       true,  0, 'J'},
         {"log-directory",       true,  0, 'l'},
         {"terrain-directory",   true,  0, 't'},
         {"storage-directory",   true,  0, 's'},
@@ -334,7 +362,7 @@ void HAL_Linux::run(int argc, char* const argv[], Callbacks* callbacks) const
         {0, false, 0, 0}
     };
 
-    GetOptLong gopt(argc, argv, "A:B:C:D:E:F:G:H:l:t:s:he:SM:c:",
+    GetOptLong gopt(argc, argv, "A:B:C:D:E:F:G:H:I:J:l:t:s:he:SM:c:",
                     options);
 
     /*
@@ -466,6 +494,11 @@ void HAL_Linux::exit_signal_handler(int signum)
 }
 
 const AP_HAL::HAL &AP_HAL::get_HAL()
+{
+    return hal_linux;
+}
+
+AP_HAL::HAL &AP_HAL::get_HAL_mutable()
 {
     return hal_linux;
 }

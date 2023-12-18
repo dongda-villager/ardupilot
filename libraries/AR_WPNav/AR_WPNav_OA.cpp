@@ -18,6 +18,7 @@
 #include <AP_HAL/AP_HAL.h>
 #include "AR_WPNav_OA.h"
 #include <GCS_MAVLink/GCS.h>
+#include <AP_InternalError/AP_InternalError.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -137,7 +138,7 @@ void AR_WPNav_OA::update(float dt)
 
 // set desired location and (optionally) next_destination
 // next_destination should be provided if known to allow smooth cornering
-bool AR_WPNav_OA::set_desired_location(const struct Location& destination, Location next_destination)
+bool AR_WPNav_OA::set_desired_location(const Location& destination, Location next_destination)
 {
     const bool ret = AR_WPNav::set_desired_location(destination, next_destination);
 

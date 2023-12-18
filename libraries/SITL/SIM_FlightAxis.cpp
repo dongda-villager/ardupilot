@@ -511,6 +511,7 @@ void FlightAxis::update(const struct sitl_input &input)
     battery_current = MAX(state.m_batteryCurrentDraw_AMPS, 0);
     rpm[0] = state.m_heliMainRotorRPM;
     rpm[1] = state.m_propRPM;
+    motor_mask = 3;
 
     /*
       the interlink interface supports 12 input channels
@@ -551,6 +552,13 @@ void FlightAxis::update(const struct sitl_input &input)
     // update magnetic field
     update_mag_field_bf();
 
+    // one rangefinder
+    if (is_positive(dcm.c.z)) {
+        rangefinder_m[0] = state.m_altitudeAGL_MTR / dcm.c.z;
+    } else {
+        rangefinder_m[0] = nanf("");
+    }
+
     report_FPS();
 }
 
@@ -587,7 +595,11 @@ void FlightAxis::socket_creator(void)
             usleep(500);
             continue;
         }
-        if (!sck->connect(controller_ip, controller_port)) {
+        /*
+          don't let the connection take more than 100ms (10Hz). Longer
+          than this and we are better off trying for a new socket
+         */
+        if (!sck->connect_timeout(controller_ip, controller_port, 100)) {
             ::printf("connect failed\n");
             delete sck;
             usleep(5000);

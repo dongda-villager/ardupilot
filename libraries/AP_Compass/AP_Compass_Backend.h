@@ -29,6 +29,8 @@
 #include <AP_MSP/msp.h>
 #endif
 
+#include <AP_Math/AP_Math.h>
+
 class Compass;  // forward declaration
 class AP_Compass_Backend
 {
@@ -71,6 +73,7 @@ public:
         DEVTYPE_MMC5983 = 0x13,
         DEVTYPE_AK09918 = 0x14,
         DEVTYPE_AK09915 = 0x15,
+    	DEVTYPE_QMC5883P = 0x16,
     };
 
 #if AP_COMPASS_MSP_ENABLED
@@ -90,7 +93,7 @@ protected:
      * 2. publish_raw_field - this provides an uncorrected point-sample for
      *      calibration libraries
      * 3. correct_field - this corrects the measurement in-place for hard iron,
-     *      soft iron, motor interference, and non-orthagonality errors
+     *      soft iron, motor interference, and non-orthogonality errors
      * 4. publish_filtered_field - legacy filtered magnetic field
      *
      * All those functions expect the mag field to be in milligauss.

@@ -4,7 +4,7 @@
 #include <AP_Logger/AP_Logger.h>
 #include <AP_Motors/AP_Motors.h>    // motors library
 #include <AP_Vehicle/AP_Vehicle_Type.h>
-#include <AP_InertialSensor/AP_InertialSensor.h>
+#include <AP_Scheduler/AP_Scheduler.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -202,6 +202,31 @@ const AP_Param::GroupInfo AC_PosControl::var_info[] = {
     // @Description: Sets an upper limit on the slew rate produced by the combined P and D gains. If the amplitude of the control action produced by the rate feedback exceeds this value, then the D+P gain is reduced to respect the limit. This limits the amplitude of high frequency oscillations caused by an excessive gain. The limit should be set to no more than 25% of the actuators maximum slew rate to allow for load effects. Note: The gain will not be reduced to less than 10% of the nominal value. A value of zero will disable this feature.
     // @Range: 0 200
     // @Increment: 0.5
+    // @User: Advanced
+
+    // @Param: _ACCZ_PDMX
+    // @DisplayName: Acceleration (vertical) controller PD sum maximum
+    // @Description: Acceleration (vertical) controller PD sum maximum.  The maximum/minimum value that the sum of the P and D term can output
+    // @Range: 0 1000
+    // @Units: d%
+
+    // @Param: _ACCZ_D_FF
+    // @DisplayName: Accel (vertical) Derivative FeedForward Gain
+    // @Description: FF D Gain which produces an output that is proportional to the rate of change of the target
+    // @Range: 0 0.02
+    // @Increment: 0.0001
+    // @User: Advanced
+
+    // @Param: _ACCZ_NTF
+    // @DisplayName: Accel (vertical) Target notch filter index
+    // @Description: Accel (vertical) Target notch filter index
+    // @Range: 1 8
+    // @User: Advanced
+
+    // @Param: _ACCZ_NEF
+    // @DisplayName: Accel (vertical) Error notch filter index
+    // @Description: Accel (vertical) Error notch filter index
+    // @Range: 1 8
     // @User: Advanced
 
     AP_SUBGROUPINFO(_pid_accel_z, "_ACCZ_", 4, AC_PosControl, AC_PID),
@@ -518,7 +543,7 @@ void AC_PosControl::init_xy_controller()
     init_ekf_xy_reset();
 
     // initialise z_controller time out
-    _last_update_xy_us = AP::ins().get_last_update_usec();
+    _last_update_xy_ticks = AP::scheduler().ticks32();
 }
 
 /// input_accel_xy - calculate a jerk limited path from the current position, velocity and acceleration to an input acceleration.
@@ -589,8 +614,8 @@ void AC_PosControl::stop_vel_xy_stabilisation()
 // is_active_xy - returns true if the xy position controller has bee n run in the previous 5 loop times
 bool AC_PosControl::is_active_xy() const
 {
-    const uint32_t dt_us = AP::ins().get_last_update_usec() - _last_update_xy_us;
-    return dt_us <= _dt * 1500000.0;
+    const uint32_t dt_ticks = AP::scheduler().ticks32() - _last_update_xy_ticks;
+    return dt_ticks <= 1;
 }
 
 /// update_xy_controller - runs the horizontal position controller correcting position, velocity and acceleration errors.
@@ -610,7 +635,7 @@ void AC_PosControl::update_xy_controller()
             INTERNAL_ERROR(AP_InternalError::error_t::flow_of_control);
         }
     }
-    _last_update_xy_us = AP::ins().get_last_update_usec();
+    _last_update_xy_ticks = AP::scheduler().ticks32();
 
     float ahrsGndSpdLimit, ahrsControlScaleXY;
     AP::ahrs().getControlLimits(ahrsGndSpdLimit, ahrsControlScaleXY);
@@ -649,6 +674,13 @@ void AC_PosControl::update_xy_controller()
     if (!limit_accel_xy(_vel_desired.xy(), _accel_target.xy(), accel_max)) {
         // _accel_target was not limited so we can zero the xy limit vector
         _limit_vector.xy().zero();
+    } else {
+        // Check for pitch limiting in the forward direction
+        const float accel_fwd_unlimited = _limit_vector.x * _ahrs.cos_yaw() + _limit_vector.y * _ahrs.sin_yaw();
+        const float pitch_target_unlimited = accel_to_angle(- MIN(accel_fwd_unlimited, accel_max) * 0.01f) * 100;
+        const float accel_fwd_limited = _accel_target.x * _ahrs.cos_yaw() + _accel_target.y * _ahrs.sin_yaw();
+        const float pitch_target_limited = accel_to_angle(- accel_fwd_limited * 0.01f) * 100;
+        _fwd_pitch_is_limited = is_negative(pitch_target_unlimited) && pitch_target_unlimited < pitch_target_limited;
     }
 
     // update angle targets that will be passed to stabilize controller
@@ -779,7 +811,7 @@ void AC_PosControl::init_z_controller()
     init_ekf_z_reset();
 
     // initialise z_controller time out
-    _last_update_z_us = AP::ins().get_last_update_usec();
+    _last_update_z_ticks = AP::scheduler().ticks32();
 }
 
 /// input_accel_z - calculate a jerk limited path from the current position, velocity and acceleration to an input acceleration.
@@ -904,8 +936,8 @@ void AC_PosControl::update_pos_offset_z(float pos_offset_z)
 // is_active_z - returns true if the z position controller has been run in the previous 5 loop times
 bool AC_PosControl::is_active_z() const
 {
-    const uint32_t dt_us = AP::ins().get_last_update_usec() - _last_update_z_us;
-    return dt_us <= _dt * 1500000.0;
+    const uint32_t dt_ticks = AP::scheduler().ticks32() - _last_update_z_ticks;
+    return dt_ticks <= 1;
 }
 
 /// update_z_controller - runs the vertical position controller correcting position, velocity and acceleration errors.
@@ -925,7 +957,7 @@ void AC_PosControl::update_z_controller()
             INTERNAL_ERROR(AP_InternalError::error_t::flow_of_control);
         }
     }
-    _last_update_z_us = AP::ins().get_last_update_usec();
+    _last_update_z_ticks = AP::scheduler().ticks32();
 
     // calculate the target velocity correction
     float pos_target_zf = _pos_target.z;

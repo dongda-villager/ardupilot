@@ -34,6 +34,7 @@
 #include <SITL/SIM_AirSim.h>
 #include <SITL/SIM_Scrimmage.h>
 #include <SITL/SIM_Webots.h>
+#include <SITL/SIM_Webots_Python.h>
 #include <SITL/SIM_JSON.h>
 #include <SITL/SIM_Blimp.h>
 #include <AP_Filesystem/AP_Filesystem.h>
@@ -44,6 +45,9 @@
 #include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
+
+#define FORCE_VERSION_H_INCLUDE
+#include "ap_version.h"
 
 extern HAL_SITL& hal;
 
@@ -173,6 +177,7 @@ static const struct {
     { "morse",              Morse::create },
     { "airsim",             AirSim::create},
     { "scrimmage",          Scrimmage::create },
+    { "webots-python",      WebotsPython::create },
     { "webots",             Webots::create },
     { "JSON",               JSON::create },
     { "blimp",              Blimp::create },
@@ -201,6 +206,7 @@ void SITL_State::_parse_command_line(int argc, char * const argv[])
 {
     int opt;
     float speedup = 1.0f;
+    float sim_rate_hz = 0;
     _instance = 0;
     _synthetic_clock_mode = false;
     // default to CMAC
@@ -353,7 +359,7 @@ void SITL_State::_parse_command_line(int argc, char * const argv[])
     bool storage_fram_enabled = false;
     bool erase_all_storage = false;
 
-    if (asprintf(&autotest_dir, SKETCHBOOK "/Tools/autotest") <= 0) {
+    if (asprintf(&autotest_dir, AP_BUILD_ROOT "/Tools/autotest") <= 0) {
         AP_HAL::panic("out of memory");
     }
     _set_signal_handlers();
@@ -378,6 +384,12 @@ void SITL_State::_parse_command_line(int argc, char * const argv[])
             temp_cmdline_param = {"SIM_SPEEDUP", speedup};
             cmdline_param.push_back(temp_cmdline_param);
             printf("Setting SIM_SPEEDUP=%f\n", speedup);
+            break;
+        case 'r':
+            sim_rate_hz = strtof(gopt.optarg, nullptr);
+            temp_cmdline_param = {"SIM_RATE_HZ", sim_rate_hz};
+            cmdline_param.push_back(temp_cmdline_param);
+            printf("Setting SIM_RATE_HZ=%f\n", sim_rate_hz);
             break;
         case 'C':
             HALSITL::UARTDriver::_console = true;
